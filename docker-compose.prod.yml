@@ -14,7 +14,7 @@ services:
     container_name: task-api
     build:
       context: ./backend
-      dockerfile: Dockerfile.prod
+      dockerfile: Dockerfile
     ports:
       - "4000:4000"
     environment:
@@ -33,7 +33,7 @@ services:
     container_name: task-frontend
     build:
       context: ./frontend
-      dockerfile: Dockerfile.prod
+      dockerfile: Dockerfile
     ports:
       - "5173:80"
     depends_on:
