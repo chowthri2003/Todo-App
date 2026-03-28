@@ -4,10 +4,18 @@ import { logger } from "../utils/logger.js";
 
 
 interface AuthRequest extends Request {
-  userId: string;
+  userId?: string;
 }
 export const createTask = async (req: AuthRequest, res: Response) => {
   try {
+    // ✅ check first
+    if (!req.userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized"
+      });
+    }
+
     const { title, discription, status, dueDate } = req.body;
     const DueDate = dueDate ? new Date(dueDate) : null;
 
@@ -16,7 +24,7 @@ export const createTask = async (req: AuthRequest, res: Response) => {
       discription,
       status,
       dueDate: DueDate,
-      userId: req.userId
+      userId: req.userId   // ✅ now TS knows it's string
     });
 
     logger.info(`Task created successfully: ID ${task.id}`);
