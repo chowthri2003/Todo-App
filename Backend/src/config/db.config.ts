@@ -11,6 +11,7 @@ const SequelizeConfig = new Sequelize(
     port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 5432,
     dialect: 'postgres',
     logging: false,
+    timezone: "+00:00",
     pool: {
       max: 20,
       min: 0,

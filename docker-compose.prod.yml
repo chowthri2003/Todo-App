@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    container_name: task-api
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=${PORT}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+    depends_on:
+      - db
+
+  client:
+    container_name: task-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:

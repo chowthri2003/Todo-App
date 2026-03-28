@@ -6,6 +6,7 @@ export interface Task {
   title: string;
   discription: string;
   status: 'yet' | 'ongoing' | 'completed';
+  dueDate: string;
 }
 
 interface TaskState {

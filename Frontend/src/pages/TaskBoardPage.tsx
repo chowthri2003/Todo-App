@@ -1,24 +1,108 @@
-import { useState, useEffect } from 'react';
-import { Plus, Trash2, UserPen, TableProperties, GripVertical } from 'lucide-react';
-import { DragDropContext, Droppable, Draggable} from '@hello-pangea/dnd';
+import { useState, useEffect, useReducer } from 'react';
+import { Plus, Trash2, UserPen, TableProperties, GripVertical, Calendar, ListTodo, CheckCircle2, Clock } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
-import { axiosInstance } from '../lib/axios';
+import { axiosInstance } from '@/lib/axios';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { setTasks, addTask, updateTask, deleteTask } from '../store/slice/slice';
 import { useNavigate } from 'react-router-dom';
 import { toast } from "sonner";
+import { themes } from '../lib/themes';
+import { useTheme } from '../context/ThemeContext';
+import { useUser, UserButton } from "@clerk/clerk-react";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 type Status = 'yet' | 'ongoing' | 'completed';
+
+type FormState = {
+  open: boolean;
+  editingId: number | null;
+  title: string;
+  desc: string;
+  status: Status;
+  dueDate: string;
+};
+
+type FormAction =
+  | { type: "OPEN_NEW" }
+  | { type: "OPEN_EDIT"; task: any }
+  | { type: "CLOSE" }
+  | { type: "SET_TITLE"; value: string }
+  | { type: "SET_DESC"; value: string }
+  | { type: "SET_STATUS"; value: Status }
+  | { type: "SET_DUEDATE"; value: string };
+
+function formReducer(state: FormState, action: FormAction): FormState {
+  switch (action.type) {
+    case "OPEN_NEW":
+      return { open: true, editingId: null, title: "", desc: "", status: "yet", dueDate: "" };
+
+    case "OPEN_EDIT":
+      return {
+        open: true,
+        editingId: action.task.id,
+        title: action.task.title,
+        desc: action.task.discription,
+        status: action.task.status,
+        dueDate: action.task.dueDate ? new Date(action.task.dueDate).toISOString().slice(0, 16) : ""
+      };
+
+    case "CLOSE":
+      return { ...state, open: false };
+
+    case "SET_TITLE":
+      return { ...state, title: action.value };
+
+    case "SET_DESC":
+      return { ...state, desc: action.value };
+
+    case "SET_STATUS":
+      return { ...state, status: action.value };
+
+    case "SET_DUEDATE":
+      return { ...state, dueDate: action.value }
+
+    default:
+      return state;
+  }
+}
 
 export default function TaskBoard() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const tasks = useAppSelector((state) => state.task.tasks);
-  const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [title, setTitle] = useState('');
-  const [desc, setDesc] = useState('');
-  const [status, setStatus] = useState<Status>('yet');
+  const { user } = useUser();
+  const [form, dispatchForm] = useReducer(formReducer, {
+    open: false,
+    editingId: null,
+    title: "",
+    desc: "",
+    status: "yet",
+    dueDate: "",
+  });
+
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     fetchTasks();
@@ -56,18 +140,15 @@ export default function TaskBoard() {
   };
 
   const openModal = (task?: any) => {
-    setEditingId(task?.id || null);
-    setTitle(task?.title || '');
-    setDesc(task?.discription || '');
-    setStatus(task?.status || 'yet');
-    setShowModal(true);
+    if (task) dispatchForm({ type: "OPEN_EDIT", task });
+    else dispatchForm({ type: "OPEN_NEW" });
   };
 
   const saveTask = async () => {
-    const data = { title, discription: desc, status };
+    const data = { title: form.title, discription: form.desc, status: form.status, dueDate: form.dueDate || null };
     try {
-      if (editingId) {
-        const res = await axiosInstance.put(`/task/${editingId}`, data);
+      if (form.editingId) {
+        const res = await axiosInstance.put(`/task/${form.editingId}`, data);
         dispatch(updateTask(res.data.data));
         toast.success("Task updated successfully");
       } else {
@@ -75,7 +156,7 @@ export default function TaskBoard() {
         dispatch(addTask(res.data.data));
         toast.success("Task created successfully");
       }
-      setShowModal(false);
+      dispatchForm({ type: "CLOSE" });
     } catch (error) {
       toast.error("Failed to save task");
     }
@@ -99,160 +180,230 @@ export default function TaskBoard() {
     });
   };
 
- 
-const formatUpperCase = (value: string) => {
-  return value
-    .replace(/[^A-Za-z\s]/g, '') 
-    .replace(/\s+/g, ' ')
-    .trimStart()
-    .toUpperCase();
-};
-const formatSentenceCase = (value: string) => {
-  if (!value) return '';
-  return value
-    .replace(/\s+/g, ' ')    
-    .trimStart()
-    .toLowerCase()              
-    .replace(/(^\s*\w|[.!?]\s*\w)/g, (char) => char.toUpperCase());
-};
+  const formatUpperCase = (value: string) => {
+    return value
+      .replace(/[^A-Za-z\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trimStart()
+      .toUpperCase();
+  };
+  const formatSentenceCase = (value: string) => {
+    if (!value) return '';
+    return value
+      .replace(/\s+/g, ' ')
+      .trimStart()
+      .toLowerCase()
+      .replace(/(^\s*\w|[.!?]\s*\w)/g, (char) => char.toUpperCase());
+  };
+const isFormValid =
+  form.title.trim().length > 0 &&
+  form.desc.trim().length > 0 &&
+  form.dueDate !== "";
+
+  const getStatusInfo = (status: Status) => {
+    switch (status) {
+      case 'yet': return { label: 'To Do', icon: <ListTodo className="w-4 h-4" />, color: 'bg-zinc-100 text-zinc-600 border-zinc-200' };
+      case 'ongoing': return { label: 'In Progress', icon: <Clock className="w-4 h-4" />, color: 'bg-blue-50 text-blue-600 border-blue-100' };
+      case 'completed': return { label: 'Completed', icon: <CheckCircle2 className="w-4 h-4" />, color: 'bg-green-50 text-green-600 border-green-100' };
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans text-gray-900">
-      <div className="max-w-6xl mx-auto flex justify-between items-center mb-8">
-        <h1 className="text-xl font-black italic uppercase">Task Board</h1>
-        <div className="flex gap-3">
-          <button 
-            onClick={() => navigate('/task')} 
-            className="bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-gray-50 transition">
-            <TableProperties size={18}/> View List
-          </button>
-          <button
-           onClick={() => openModal()} 
-           className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm hover:bg-blue-700 transition">
-          <Plus size={18}/> New Task
-          </button>
+    <div className="min-h-screen p-6 font-sans transition-colors duration-300"
+      style={{
+        background: theme.colors.background,
+        color: theme.colors.text,
+      }}>
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
+        <div className="flex items-center gap-4">
+          <UserButton afterSignOutUrl="/" />
+          <div>
+            <h1 className="text-2xl font-black italic uppercase tracking-tighter" style={{ color: theme.colors.text }}>
+              {user?.firstName}'s Board
+            </h1>
+            <p className="text-sm opacity-60 font-medium">Manage your daily activities</p>
+          </div>
+        </div>
+        
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="flex bg-white/5 backdrop-blur-sm p-1 rounded-lg border border-white/10 mr-2">
+            {themes.map(t => (
+              <button
+                key={t.name}
+                onClick={() => setTheme(t)}
+                className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 ${theme.name === t.name ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-60'}`}
+                style={{ background: t.colors.accent }}
+                title={t.name}
+              />
+            ))}
+          </div>
+          
+          <Button variant="outline" size="sm" onClick={() => navigate('/task')} className="gap-2 font-bold uppercase text-[10px]">
+            <TableProperties className="w-4 h-4" /> List View
+          </Button>
+          
+          <Button size="sm" onClick={() => openModal()} className="gap-2 font-bold uppercase text-[10px] bg-primary shadow-lg shadow-primary/20">
+            <Plus className="w-4 h-4" /> New Task
+          </Button>
         </div>
       </div>
 
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
-          {(['yet', 'ongoing', 'completed'] as Status[]).map(colId => (
-            <div key={colId} className="bg-gray-200/40 p-4 rounded-xl min-h-[500px] border border-gray-200/50 flex flex-col">
-              <div className="flex justify-between items-center mb-4 px-2">
-                <h2 className="text-[10px] font-black uppercase text-gray-400 tracking-widest">
-                    {colId === 'yet' ? 'Yet to Start' : colId}
-                </h2>
-                <span className="text-[10px] font-bold bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full">
-                  {tasks.filter(t => t.status === colId).length}
-                </span>
-              </div>
-              
-              <Droppable droppableId={colId}>
-                {(provided, snapshot) => (
-                  <div 
-                    {...provided.droppableProps} 
-                    ref={provided.innerRef} 
-                    className={`flex-1 space-y-3 transition-colors rounded-lg p-1 ${snapshot.isDraggingOver ? 'bg-blue-50/50' : ''}`}
-                  >
-                    {tasks.filter(t => t.status === colId).map((task, index) => (
-                      <Draggable key={task.id} draggableId={task.id.toString()} index={index}>
-                        {(p, s) => (
-                          <div 
-                            ref={p.innerRef} 
-                            {...p.draggableProps} 
-                            className={`bg-white p-4 rounded-lg shadow-sm border border-gray-100 group transition-all 
-                              ${s.isDragging ? 'shadow-2xl border-blue-400' : 'hover:border-blue-200'}`}
-                          >
-                            <div className="flex gap-3">
-                              <div {...p.dragHandleProps} className="text-gray-300 hover:text-blue-500 cursor-grab">
-                                <GripVertical size={20}/>
-                              </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
+          {(['yet', 'ongoing', 'completed'] as Status[]).map(colId => {
+            const statusInfo = getStatusInfo(colId);
+            const columnTasks = tasks.filter(t => t.status === colId);
+            
+            return (
+              <div key={colId} className="flex flex-col h-full min-h-[600px]">
+                <div className="flex justify-between items-center mb-4 px-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`p-1.5 rounded-md ${statusInfo.color.split(' ')[0]} ${statusInfo.color.split(' ')[1]}`}>
+                      {statusInfo.icon}
+                    </span>
+                    <h2 className="text-xs font-black uppercase tracking-widest opacity-70">
+                      {statusInfo.label}
+                    </h2>
+                  </div>
+                  <Badge variant="outline" className="text-[10px] font-bold px-2 py-0">
+                    {columnTasks.length}
+                  </Badge>
+                </div>
 
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-bold text-gray-800 italic text-sm truncate tracking-tight">
-                                  {task.title}
-                                </h3>
-                                <p className="text-xs text-gray-500 capitalize italic truncate tracking-tight line-clamp-2 mt-1">{task.discription}</p>
-                                
-                                <div className="flex justify-end gap-4 mt-4 border-t border-gray-50 pt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={() => openModal(task)}>
-                                    <UserPen size={14} className="text-blue-400 hover:text-blue-600 transition-colors"/>
-                                  </button>
-                                  <button onClick={() => handleDelete(task.id)}>
-                                    <Trash2 size={14} className="text-red-300 hover:text-red-500 transition-colors"/>
-                                  </button>
+                <Droppable droppableId={colId}>
+                  {(provided, snapshot) => (
+                    <ScrollArea className="flex-1 -mx-2 px-2">
+                      <div
+                        {...provided.droppableProps}
+                        ref={provided.innerRef}
+                        className={`flex-1 space-y-4 min-h-[500px] transition-all rounded-xl p-2 border-2 border-dashed 
+                          ${snapshot.isDraggingOver ? 'bg-primary/5 border-primary/20' : 'border-transparent'}`}
+                      >
+                        {columnTasks.map((task, index) => (
+                          <Draggable key={task.id} draggableId={task.id.toString()} index={index}>
+                            {(p, s) => (
+                              <Card
+                                ref={p.innerRef}
+                                {...p.draggableProps}
+                                className={`group relative border-none shadow-sm transition-all hover:shadow-md 
+                                  ${s.isDragging ? 'shadow-2xl ring-2 ring-primary scale-[1.02] rotate-1' : ''}`}
+                              >
+                                <div {...p.dragHandleProps} className="absolute left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab text-muted-foreground/30 hover:text-primary">
+                                  <GripVertical className="w-4 h-4" />
                                 </div>
-                              </div>
-                            </div>
+                                
+                                <CardHeader className="p-4 pb-2 ml-4">
+                                  <CardTitle className="text-sm font-bold tracking-tight italic uppercase truncate">
+                                    {task.title}
+                                  </CardTitle>
+                                </CardHeader>
+                                
+                                <CardContent className="p-4 pt-0 ml-4 pb-4">
+                                  <p className="text-xs text-muted-foreground line-clamp-2 italic font-medium">
+                                    {task.discription}
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-4 text-[10px] font-bold text-orange-500/80 uppercase">
+                                    <Calendar className="w-3 h-3" />
+                                    {new Date(task.dueDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                                  </div>
+                                </CardContent>
+                                
+                                <CardFooter className="p-2 pt-0 justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all ml-4">
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500/70 hover:text-blue-600 hover:bg-blue-50" onClick={() => openModal(task)}>
+                                    <UserPen className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(task.id)}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </CardFooter>
+                              </Card>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                        
+                        {columnTasks.length === 0 && !snapshot.isDraggingOver && (
+                          <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-muted/20 rounded-xl text-muted-foreground/30">
+                            <ListTodo className="w-8 h-8 mb-2 opacity-20" />
+                            <p className="text-[10px] font-black uppercase tracking-widest">No Tasks</p>
                           </div>
                         )}
-                      </Draggable>
-                    ))}
-             
-                    {tasks.filter(t => t.status === colId).length === 0 && !snapshot.isDraggingOver && (
-                      <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-lg text-gray-300 text-[10px] font-bold uppercase">
-                        No Tasks
                       </div>
-                    )}
-                  </div>
-                )}
-              </Droppable>
-            </div>
-          ))}
+                    </ScrollArea>
+                  )}
+                </Droppable>
+              </div>
+            );
+          })}
         </div>
       </DragDropContext>
-      {showModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 rounded-xl w-full max-w-md shadow-2xl border border-gray-100">
-            <div className="flex justify-between items-center mb-6 border-b border-gray-200 pb-3">
-              <h2 className="font-black text-gray-800 uppercase italic tracking-tight">Manage Task</h2>
-             <button
-              aria-label="close"
-              onClick={() => setShowModal(false)}
-              className="text-gray-400 hover:text-red-500"
-            >
-              X
-            </button>
+
+      <Dialog open={form.open} onOpenChange={(open) => !open && dispatchForm({ type: "CLOSE" })}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-black uppercase italic tracking-tighter text-xl">
+              {form.editingId ? 'Edit Task' : 'Create Task'}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase opacity-50 ml-1">Title</label>
+              <Input
+                value={form.title}
+                onChange={e => dispatchForm({ type: "SET_TITLE", value: formatUpperCase(e.target.value) })}
+                placeholder="WHAT NEEDS TO BE DONE?"
+                className="font-bold uppercase tracking-tight"
+              />
             </div>
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Title</label>
-                <input
-                 value={title} 
-                onChange={e => setTitle(formatUpperCase(e.target.value))} 
-                placeholder="Task title..."
-                 className="w-full p-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500 transition-all"/>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase opacity-50 ml-1">Status</label>
+                <Select value={form.status} onValueChange={(v) => dispatchForm({ type: "SET_STATUS", value: v as Status })}>
+                  <SelectTrigger className="font-bold uppercase text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yet" className="font-bold uppercase text-xs">To Do</SelectItem>
+                    <SelectItem value="ongoing" className="font-bold uppercase text-xs">In Progress</SelectItem>
+                    <SelectItem value="completed" className="font-bold uppercase text-xs">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="flex gap-2 items-end">
-                <div className="flex-1">
-                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Status</label>
-                  <select
-                   value={status}
-                   onChange={e => setStatus(e.target.value as Status)} 
-                   className="w-full p-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50">
-                    <option value="yet">Yet to Start</option>
-                    <option value="ongoing">Ongoing</option>
-                    <option value="completed">Completed</option>
-                  </select>
-                </div>
-                <button 
-                  onClick={saveTask}
-                 className="bg-blue-600 text-white px-6 py-2.5 rounded-lg text-sm font-black uppercase shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all">
-                  {editingId ? 'Update' : 'Add'}
-                </button>
+              
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase opacity-50 ml-1">Due Date</label>
+                <Input
+                  type="datetime-local"
+                  value={form.dueDate}
+                  onChange={e => dispatchForm({ type: "SET_DUEDATE", value: e.target.value })}
+                  className="font-bold text-xs"
+                />
               </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Description</label>
-                <textarea
-                  value={desc}
-                  onChange={e => setDesc(formatSentenceCase(e.target.value))} 
-                  placeholder="Task details..." 
-                  className="w-full p-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 h-28 resize-none outline-none focus:ring-2 focus:ring-blue-500 transition-all"/>
-              </div>
+            </div>
+            
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase opacity-50 ml-1">Description</label>
+              <Textarea
+                value={form.desc}
+                onChange={e => dispatchForm({ type: "SET_DESC", value: formatSentenceCase(e.target.value) })}
+                placeholder="Detailed information about the task..."
+                className="min-h-[100px] font-medium"
+              />
             </div>
           </div>
-        </div>
-      )}
+          
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => dispatchForm({ type: "CLOSE" })} className="font-black uppercase text-[10px]">
+              Cancel
+            </Button>
+            <Button onClick={saveTask} disabled={!isFormValid} className="font-black uppercase text-[10px] px-8">
+              {form.editingId ? 'Save Changes' : 'Create Task'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-}
+}
