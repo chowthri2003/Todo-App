@@ -30,7 +30,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 type Status = 'yet' | 'ongoing' | 'completed';
@@ -406,4 +405,4 @@ const isFormValid =
       </Dialog>
     </div>
   );
-}
+}
