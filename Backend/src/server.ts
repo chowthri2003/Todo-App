@@ -53,8 +53,8 @@ const apiLimiter = rateLimit({
   store: new RedisStore({
   sendCommand: (...args: any[]) => redisClient.call(...args),
   }),
-  windowMs: 15 * 60 * 1000,
-  max: 6,
+  windowMs: 5 * 60 * 1000,
+  max: 10,
    handler: (req, res) => {
     console.log("Rate limit exceeded for:", req.ip);
     res.status(429).json({

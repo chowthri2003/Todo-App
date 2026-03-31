@@ -107,14 +107,17 @@ export default function TaskBoard() {
     fetchTasks();
   }, []);
 
-  const fetchTasks = async () => {
-    try {
-      const res = await axiosInstance.get("/task");
-      dispatch(setTasks(res.data.data));
-    } catch (error) {
-      toast.error("Failed to load tasks");
-    }
-  };
+ const fetchTasks = async () => {
+  try {
+    const res = await axiosInstance.get("/task");
+    dispatch(setTasks(res.data.data));
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message || "Failed to load tasks";
+
+    toast.error(message);
+  }
+};
 
   const onDragEnd = async (result: DropResult) => {
     const { destination, source, draggableId } = result;
@@ -132,7 +135,7 @@ export default function TaskBoard() {
       try {
         await axiosInstance.put(`/task/${taskId}`, { status: newStatus });
       } catch (error) {
-        toast.error("Failed to sync move with server");
+        toast.error("Failed to update status");
         fetchTasks();
       }
     }
